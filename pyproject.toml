@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pebble-lang"
+version = "1.0.0"
+description = "A small programming language implemented from scratch: lexer, Pratt parser, static resolver and tree-walking interpreter, with closures and a REPL."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Umer Hashmi" }]
+requires-python = ">=3.10"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Interpreters",
+  "Topic :: Software Development :: Compilers",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff==0.16.8"]
+
+[project.scripts]
+pebble = "pebble.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+# An explicit rule set, rather than whatever the newest ruff turns on by default:
+# an unpinned linter with implicit rules means CI breaks on someone else's release
+# schedule, not on a change to this code.
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# The token table is one enum member per line by design: it reads as a table of
+# the language's lexical elements, which is what it is.
+"src/pebble/tokens.py" = ["E702"]

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Test
+        run: pytest -q
+      - name: Every example runs
+        run: |
+          for file in examples/*.pb; do
+            echo "--- $file"
+            pebble run "$file"
+          done
+      - name: The stages are inspectable
+        run: |
+          pebble tokens -c 'let a = 1 + 2;'
+          pebble ast    -c 'let a = 1 + 2;'
+          pebble builtins
+          pebble bench -n 18
+      - name: Resolution changes the answer
+        run: |
+          pebble run             -c 'let a = "global"; { fn f() { print(a); } f(); let a = "block"; f(); }'
+          pebble run --no-resolve -c 'let a = "global"; { fn f() { print(a); } f(); let a = "block"; f(); }'
