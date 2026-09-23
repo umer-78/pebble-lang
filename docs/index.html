@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pebble — Language REPL Demo</title>
+  <meta name="description" content="Interactive REPL for pebble: a small language with closures, a Pratt parser and a tree-walking interpreter.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232563eb'/><text x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='monospace'>λ</text></svg>">
+  <style>
+    :root {
+      --bg: #f6f7f9; --surface: #ffffff; --surface-2: #eef0f4; --border: #dde1e8;
+      --text: #16181d; --muted: #5d6573; --accent: #2563eb; --accent-ink: #ffffff;
+      --good: #15803d; --bad: #b91c1c; --radius: 12px;
+      --shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 4px 16px rgb(16 24 40 / 0.05);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e1116; --surface: #161a21; --surface-2: #1d222b; --border: #2a303b;
+        --text: #e8eaee; --muted: #9aa3b2; --accent: #60a5fa; --accent-ink: #0b1220;
+        --good: #4ade80; --bad: #f87171; --shadow: none; color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body { font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+    header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    header.top h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+    header.top p { margin: 2px 0 0; color: var(--muted); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); min-width: 0; margin-bottom: 16px; }
+    .card h2 { font-size: 15px; margin: 0 0 12px; }
+    .grid { display: grid; gap: 16px; }
+    .grid.two { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    input, select, textarea, button { font: inherit; color: inherit; }
+    textarea {
+      width: 100%; padding: 9px 11px; border-radius: 9px;
+      border: 1px solid var(--border); background: var(--surface-2); outline: none; min-width: 0;
+      font-family: var(--mono); font-size: 14px; line-height: 1.5; resize: vertical;
+    }
+    textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button { cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); padding: 9px 14px; border-radius: 9px; font-weight: 600; }
+    button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .muted { color: var(--muted); }
+    .mono { font-family: var(--mono); }
+    footer { margin-top: 32px; color: var(--muted); font-size: 13px; text-align: center; }
+    .presets { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+    .presets button { font-size: 13px; padding: 5px 10px; font-weight: 500; }
+    .result-box { font-family: var(--mono); font-size: 14px; padding: 12px; background: var(--surface-2); border-radius: 8px; margin-top: 10px; white-space: pre-wrap; word-break: break-word; }
+    .result-box.out { border-left: 3px solid var(--good); }
+    .result-box.err { border-left: 3px solid var(--bad); color: var(--bad); }
+    .finding { padding: 10px 12px; border-radius: 8px; margin: 8px 0; font-size: 14px; }
+    .finding.ok { background: color-mix(in srgb, var(--good) 12%, transparent); border: 1px solid color-mix(in srgb, var(--good) 30%, transparent); }
+    .finding.risk { background: color-mix(in srgb, var(--bad) 12%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); }
+    .finding .kind { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .finding.ok .kind { color: var(--good); }
+    .finding.risk .kind { color: var(--bad); }
+    .finding .detail { margin-top: 4px; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .table-wrap { overflow-x: auto; }
+    code { font-family: var(--mono); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1>pebble</h1>
+        <p>A small language in the browser: lexer → Pratt parser → resolver → tree-walking interpreter.</p>
+      </div>
+      <a href="https://github.com/umer-78/pebble-lang">Source on GitHub</a>
+    </header>
+
+    <section class="card">
+      <h2>Run a program</h2>
+      <p class="muted" style="margin-top:0">Write Pebble code and press <b>Run</b>. Output and errors (with line/column) appear below, alongside the AST.</p>
+      <div class="presets">
+        <button data-p="fib">fib</button>
+        <button data-p="closures">closures</button>
+        <button data-p="loops">per-iteration binds</button>
+        <button data-p="resolver">resolver scope</button>
+        <button data-p="error">error position</button>
+      </div>
+      <label for="src">Program</label>
+      <textarea id="src" rows="10" spellcheck="false">fn fib(n) {
+  if (n < 2) { return n; }
+  return fib(n - 1) + fib(n - 2);
+}
+print(fib(15));</textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="runBtn">Run</button>
+        <button id="clearBtn">Clear output</button>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:14px;color:var(--text)">
+          <input type="checkbox" id="showResolve" checked style="width:auto"> resolver
+        </label>
+      </div>
+      <div id="output" class="result-box out" aria-live="polite">Press Run to execute.</div>
+      <div id="errors"></div>
+    </section>
+
+    <div class="grid two">
+      <section class="card">
+        <h2>AST</h2>
+        <p class="muted" style="margin-top:0">Parsed by a Pratt parser — binding powers, not a function per precedence level.</p>
+        <div id="astOut" class="result-box" style="margin-top:0;max-height:340px;overflow:auto">(nothing parsed yet)</div>
+      </section>
+
+      <section class="card">
+        <h2>Tokens</h2>
+        <p class="muted" style="margin-top:0">Every token carries line and column — that is where error positions come from.</p>
+        <div class="table-wrap" style="max-height:340px;overflow:auto">
+          <table>
+            <thead><tr><th>kind</th><th>lexeme</th><th>pos</th></tr></thead>
+            <tbody id="tokBody"><tr><td colspan="3" class="muted">No tokens.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>The language in one screen</h2>
+      <p><code>let</code>/<code>fn</code>/<code>return</code>, <code>if</code>/<code>else</code>, <code>while</code>/<code>for</code>, numbers are floats, strings, lists <code>[1,2]</code>, maps <code>{}</code>, closures that capture scopes, <code>and</code>/<code>or</code> short-circuit and return an operand. Sixteen builtins: <code>print len push split has str num abs min max range</code> and friends.</p>
+      <div class="grid two">
+        <div>
+          <h3 style="font-size:13px;color:var(--muted);margin:0 0 6px">A closure captures a scope, not a snapshot</h3>
+          <div class="result-box" style="margin-top:0">let a = "global";
+{
+  fn show() { print(a); }
+  show();            // global
+  let a = "block";
+  show();            // global — the hard part
+}</div>
+        </div>
+        <div>
+          <h3 style="font-size:13px;color:var(--muted);margin:0 0 6px">Per-iteration bindings</h3>
+          <div class="result-box" style="margin-top:0">let fns = [];
+for (let i = 0; i &lt; 3; i = i + 1) {
+  push(fns, fn() { return i; });
+}
+print([fns[0](), fns[1](), fns[2]()]); // [0, 1, 2]</div>
+        </div>
+      </div>
+      <p class="muted" style="margin-bottom:0">Undefined variables are errors, not <code>nil</code>. Every error names line and column: <code>line 3, column 19: undefined variable 'xs'</code>.</p>
+    </section>
+
+    <footer>217 tests · Python 3.10–3.12 · standard library only · Built by <a href="https://github.com/umer-78">Umer Hashmi</a></footer>
+  </div>
+
+  <script>
+    // === Lexer ===
+    const KEYWORDS = new Set(['let','fn','return','if','else','while','for','break','continue','true','false','nil','and','or','not']);
+    const PUNCT = ['==','!=','<=','>=','&&','||','+','-','*','/','%','(',')','{','}','[',']',';',',','=',':','<','>','!','.'];
+    function lex(src) {
+      const tokens = [];
+      let i = 0, line = 1, col = 1;
+      const err = (msg, l = line, c = col) => { const e = new Error(msg); e.line = l; e.col = c; throw e; };
+      while (i < src.length) {
+        const ch = src[i];
+        if (ch === '\n') { line++; col = 1; i++; continue; }
+        if (ch === ' ' || ch === '\t' || ch === '\r') { col++; i++; continue; }
+        if (ch === '/' && src[i+1] === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+        const startLine = line, startCol = col;
+        // string
+        if (ch === '"' || ch === "'") {
+          let j = i + 1, s = '';
+          while (j < src.length && src[j] !== ch) {
+            if (src[j] === '\\') {
+              const n = src[j+1];
+              s += n === 'n' ? '\n' : n === 't' ? '\t' : n;
+              j += 2;
+            } else { if (src[j] === '\n') { line++; col = 1; } s += src[j]; j++; }
+          }
+          if (j >= src.length) err('unterminated string', startLine, startCol);
+          tokens.push({ kind: 'STRING', value: s, lexeme: src.slice(i, j+1), line: startLine, col: startCol });
+          col += j + 1 - i; i = j + 1; continue;
+        }
+        // number
+        if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(src[i+1] || ''))) {
+          let j = i;
+          while (j < src.length && /[0-9]/.test(src[j])) j++;
+          if (src[j] === '.' && /[0-9]/.test(src[j+1] || '')) { j++; while (j < src.length && /[0-9]/.test(src[j])) j++; }
+          const lexeme = src.slice(i, j);
+          tokens.push({ kind: 'NUMBER', value: parseFloat(lexeme), lexeme, line: startLine, col: startCol });
+          col += j - i; i = j; continue;
+        }
+        // identifier / keyword
+        if (/[A-Za-z_]/.test(ch)) {
+          let j = i;
+          while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++;
+          const lexeme = src.slice(i, j);
+          const kind = KEYWORDS.has(lexeme) ? lexeme.toUpperCase() : 'IDENT';
+          tokens.push({ kind, value: lexeme, lexeme, line: startLine, col: startCol });
+          col += j - i; i = j; continue;
+        }
+        // punctuation (longest match)
+        const two = src.slice(i, i + 2);
+        const one = src[i];
+        if (PUNCT.includes(two)) {
+          tokens.push({ kind: two, value: two, lexeme: two, line: startLine, col: startCol });
+          col += 2; i += 2; continue;
+        }
+        if (PUNCT.includes(one)) {
+          tokens.push({ kind: one, value: one, lexeme: one, line: startLine, col: startCol });
+          col++; i++; continue;
+        }
+        err(`unexpected character '${ch}'`, startLine, startCol);
+      }
+      tokens.push({ kind: 'EOF', value: null, lexeme: '', line, col });
+      return tokens;
+    }
+
+    // === Pratt parser ===
+    const BINDING = {
+      'OR': 10, '||': 10,
+      'AND': 20, '&&': 20,
+      '==': 30, '!=': 30,
+      '<': 40, '<=': 40, '>': 40, '>=': 40,
+      '+': 50, '-': 50,
+      '*': 60, '/': 60, '%': 60,
+    };
+    function parse(tokens) {
+      let pos = 0;
+      const peek = () => tokens[pos];
+      const advance = () => tokens[pos++];
+      const check = (k) => peek().kind === k;
+      const match = (...ks) => { for (const k of ks) if (check(k)) { return advance(); } return null; };
+      const err = (msg, tok = peek()) => { const e = new Error(msg); e.line = tok.line; e.col = tok.col; throw e; };
+      const expect = (k, what) => { if (check(k)) return advance(); err(`expected ${what}, found ${peek().kind === 'EOF' ? 'end of input' : `'${peek().lexeme}'`}`); };
+
+      function parseProgram() {
+        const body = [];
+        while (!check('EOF')) body.push(statement());
+        return { type: 'Program', body };
+      }
+      function statement() {
+        if (check('LET')) return letStatement();
+        if (check('FN')) return fnDeclaration();
+        if (check('RETURN')) { const t = advance(); let value = null; if (!check(';') && !check('}')) value = expression(0); match(';'); return { type: 'Return', value, line: t.line, col: t.col }; }
+        if (check('IF')) return ifStatement();
+        if (check('WHILE')) { const t = advance(); expect('(', "'('"); const cond = expression(0); expect(')', "')'"); const body = block(); return { type: 'While', cond, body, line: t.line, col: t.col }; }
+        if (check('FOR')) return forStatement();
+        if (check('BREAK')) { const t = advance(); match(';'); return { type: 'Break', line: t.line, col: t.col }; }
+        if (check('CONTINUE')) { const t = advance(); match(';'); return { type: 'Continue', line: t.line, col: t.col }; }
+        if (check('{')) return block();
+        const e = expression(0);
+        match(';');
+        return { type: 'ExprStmt', expr: e };
+      }
+      function letStatement() { return letStatementCore(true); }
+      function letStatementNoSemi() { return letStatementCore(false); }
+      function letStatementCore(consumeSemi) {
+        const t = advance();
+        const name = expect('IDENT', 'a variable name');
+        let init = null;
+        if (match('=')) init = expression(0);
+        if (consumeSemi || check(';')) expect(';', "';'");
+        return { type: 'Let', name: name.value, init, line: t.line, col: t.col, nameLine: name.line, nameCol: name.col };
+      }
+      function fnDeclaration() {
+        const t = advance();
+        const name = expect('IDENT', 'a function name');
+        expect('(', "'('");
+        const params = [];
+        if (!check(')')) {
+          do { params.push(expect('IDENT', 'a parameter name').value); } while (match(','));
+        }
+        expect(')', "')'");
+        const body = block();
+        return { type: 'FnDecl', name: name.value, params, body, line: t.line, col: t.col };
+      }
+      function ifStatement() {
+        const t = advance();
+        expect('(', "'('");
+        const cond = expression(0);
+        expect(')', "')'");
+        const then = statement();
+        let alt = null;
+        if (match('ELSE')) alt = statement();
+        return { type: 'If', cond, then, alt, line: t.line, col: t.col };
+      }
+      function forStatement() {
+        const t = advance();
+        expect('(', "'('");
+        let init = null;
+        if (check(';')) advance();
+        else if (check('LET')) init = letStatementNoSemi();
+        else { init = { type: 'ExprStmt', expr: expression(0) }; expect(';', "';'"); }
+        // letStatement in for consumes ';' — handle manually
+        if (init && init.type === 'Let') { /* semicolon handled by letStatementCore */ }
+        const cond = check(';') ? { type: 'Literal', value: true } : expression(0);
+        expect(';', "';'");
+        const incr = check(')') ? null : expression(0);
+        expect(')', "')'");
+        const body = statement();
+        return { type: 'For', init, cond, incr, body, line: t.line, col: t.col };
+      }
+      function block() {
+        const open = expect('{', "'{'");
+        const body = [];
+        while (!check('}') && !check('EOF')) body.push(statement());
+        expect('}', "'}'");
+        return { type: 'Block', body, line: open.line, col: open.col };
+      }
+      function expression(minBinding) {
+        let left = unary();
+        for (;;) {
+          const tok = peek();
+          if (tok.kind === '=') {
+            if (5 < minBinding) break;
+            advance();
+            const right = expression(5); // right-associative
+            left = { type: 'Binary', left, op: '=', right, line: tok.line, col: tok.col };
+            continue;
+          }
+          const bp = BINDING[tok.kind];
+          if (bp === undefined || bp < minBinding) break;
+          advance();
+          const op = tok.kind === 'AND' || tok.kind === '&&' ? 'and'
+            : tok.kind === 'OR' || tok.kind === '||' ? 'or'
+            : tok.kind;
+          const right = expression(bp + 1); // left-assoc: recurse above own power
+          left = { type: 'Binary', left, op, right, line: tok.line, col: tok.col };
+        }
+        return left;
+      }
+      function unary() {
+        if (check('NOT') || check('!') || check('-')) {
+          const t = advance();
+          const operand = unary();
+          return { type: 'Unary', op: t.kind === 'NOT' ? 'not' : t.kind, operand, line: t.line, col: t.col };
+        }
+        return call();
+      }
+      function call() {
+        let e = primary();
+        for (;;) {
+          if (match('(')) {
+            const args = [];
+            if (!check(')')) do { args.push(expression(0)); } while (match(','));
+            expect(')', "')'");
+            e = { type: 'Call', callee: e, args, line: e.line, col: e.col };
+          } else if (match('[')) {
+            const index = expression(0);
+            expect(']', "']'");
+            e = { type: 'Index', obj: e, index, line: e.line, col: e.col };
+          } else if (match('.')) {
+            const name = expect('IDENT', 'a property name');
+            e = { type: 'Member', obj: e, name: name.value, line: e.line, col: e.col };
+          } else break;
+        }
+        return e;
+      }
+      function primary() {
+        if (check('NUMBER')) { const t = advance(); return { type: 'Literal', value: t.value, line: t.line, col: t.col }; }
+        if (check('STRING')) { const t = advance(); return { type: 'Literal', value: t.value, line: t.line, col: t.col }; }
+        if (check('TRUE')) { const t = advance(); return { type: 'Literal', value: true, line: t.line, col: t.col }; }
+        if (check('FALSE')) { const t = advance(); return { type: 'Literal', value: false, line: t.line, col: t.col }; }
+        if (check('NIL')) { const t = advance(); return { type: 'Literal', value: null, line: t.line, col: t.col }; }
+        if (check('IDENT')) { const t = advance(); return { type: 'Var', name: t.value, line: t.line, col: t.col }; }
+        if (check('(')) { advance(); const e = expression(0); expect(')', "')'"); return e; }
+        if (check('[')) {
+          const t = advance();
+          const items = [];
+          if (!check(']')) do { items.push(expression(0)); } while (match(','));
+          expect(']', "']'");
+          return { type: 'List', items, line: t.line, col: t.col };
+        }
+        if (check('{')) {
+          const t = advance();
+          const entries = [];
+          if (!check('}')) {
+            do {
+              let key;
+              if (check('STRING')) key = advance().value;
+              else key = expect('IDENT', 'a key').value;
+              expect(':', "':'");
+              entries.push([key, expression(0)]);
+            } while (match(','));
+          }
+          expect('}', "'}'");
+          return { type: 'Map', entries, line: t.line, col: t.col };
+        }
+        if (check('FN')) {
+          const t = advance();
+          expect('(', "'('");
+          const params = [];
+          if (!check(')')) do { params.push(expect('IDENT', 'a parameter').value); } while (match(','));
+          expect(')', "')'");
+          const body = block();
+          return { type: 'FnExpr', params, body, line: t.line, col: t.col };
+        }
+        err(`expected an expression, found ${peek().kind === 'EOF' ? 'end of input' : `'${peek().lexeme}'`}`);
+      }
+      return parseProgram();
+    }
+
+    // === Resolver (static scope: records declaration depth per variable use) ===
+    function resolve(ast) {
+      let scopes = [new Map()]; // name -> 'initialising' | 'ready'
+      const errors = [];
+      function begin() { scopes.push(new Map()); }
+      function end() { scopes.pop(); }
+      function declare(name, tok) {
+        const s = scopes[scopes.length - 1];
+        if (s.has(name)) {
+          const e = new Error(`'${name}' is already declared in this scope`);
+          e.line = tok ? tok.line : 0; e.col = tok ? tok.col : 0;
+          errors.push(e);
+        }
+        s.set(name, 'initialising');
+      }
+      function markReady(name) {
+        const s = scopes[scopes.length - 1];
+        if (s.get(name) === 'initialising') s.set(name, 'ready');
+      }
+      function lookup(name, node) {
+        for (let i = scopes.length - 1; i >= 0; i--) {
+          const entry = scopes[i].get(name);
+          if (entry !== undefined) {
+            if (entry === 'initialising') {
+              const e = new Error(`'${name}' is read inside its own initialiser`);
+              e.line = node.line; e.col = node.col;
+              errors.push(e);
+            }
+            node._depth = scopes.length - 1 - i; // hops from current scope to declaring scope
+            return;
+          }
+        }
+        // not found statically — builtins / late globals: interpreter falls back to name walk
+      }
+      let fnDepth = 0, loopDepth = 0;
+      function walkStmt(s) {
+        switch (s.type) {
+          case 'Let':
+            declare(s.name, { line: s.nameLine, col: s.nameCol });
+            if (s.init) walkExpr(s.init);
+            markReady(s.name);
+            break;
+          case 'FnDecl':
+            declare(s.name, s);
+            markReady(s.name);
+            fnDepth++;
+            begin();
+            for (const p of s.params) { declare(p, s); markReady(p); }
+            walkStmt(s.body);
+            end();
+            fnDepth--;
+            break;
+          case 'Return':
+            if (fnDepth === 0) { const e = new Error(`'return' outside of a function`); e.line = s.line; e.col = s.col; errors.push(e); }
+            if (s.value) walkExpr(s.value);
+            break;
+          case 'If': walkExpr(s.cond); walkStmt(s.then); if (s.alt) walkStmt(s.alt); break;
+          case 'While':
+            loopDepth++; walkExpr(s.cond); walkStmt(s.body); loopDepth--; break;
+          case 'For': {
+            begin();
+            if (s.init) walkStmt(s.init);
+            if (s.cond && s.cond.type !== 'Literal') walkExpr(s.cond);
+            if (s.incr) walkExpr(s.incr);
+            loopDepth++; walkStmt(s.body); loopDepth--;
+            end();
+            break;
+          }
+          case 'Break': case 'Continue':
+            if (loopDepth === 0) { const e = new Error(`'${s.type.toLowerCase()}' outside of a loop`); e.line = s.line; e.col = s.col; errors.push(e); }
+            break;
+          case 'Block':
+            begin(); for (const b of s.body) walkStmt(b); end(); break;
+          case 'ExprStmt': walkExpr(s.expr); break;
+        }
+      }
+      function walkExpr(e) {
+        if (!e) return;
+        switch (e.type) {
+          case 'Binary': walkExpr(e.left); walkExpr(e.right); break;
+          case 'Unary': walkExpr(e.operand); break;
+          case 'Call': walkExpr(e.callee); e.args.forEach(walkExpr); break;
+          case 'Index': walkExpr(e.obj); walkExpr(e.index); break;
+          case 'Member': walkExpr(e.obj); break;
+          case 'List': e.items.forEach(walkExpr); break;
+          case 'Map': e.entries.forEach(([, v]) => walkExpr(v)); break;
+          case 'FnExpr':
+            fnDepth++; begin();
+            e.params.forEach(p => { declare(p, e); markReady(p); });
+            walkStmt(e.body); end(); fnDepth--; break;
+          case 'Var': lookup(e.name, e); break;
+          case 'Literal': break;
+        }
+      }
+      begin();
+      for (const s of ast.body) walkStmt(s);
+      return { errors };
+    }
+
+    // === Interpreter ===
+    class ReturnEx { constructor(v) { this.value = v; } }
+    class BreakEx {} class ContinueEx {}
+    function pebError(msg, tok) { const e = new Error(msg); if (tok) { e.line = tok.line; e.col = tok.col; } return e; }
+
+    function fmtValue(v) {
+      if (v === null || v === undefined) return 'nil';
+      if (typeof v === 'boolean') return v ? 'true' : 'false';
+      if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(v);
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) return '[' + v.map(x => typeof x === 'string' && false ? x : fmtValue(x)).join(', ') + ']';
+      if (v.__fn) return '<fn>';
+      if (v.__map) {
+        const parts = [...v.__map.entries()].map(([k, val]) => `${k}: ${fmtValue(val)}`);
+        return '{' + parts.join(', ') + '}';
+      }
+      return String(v);
+    }
+    function truthy(v) { return !(v === null || v === undefined || v === false); }
+    function makeMap(entries) {
+      const m = { __map: new Map() };
+      return m;
+    }
+
+    const BUILTINS = {
+      print: { __builtin: (args, out) => { out.push(args.map(fmtValue).join(' ')); return null; } },
+      len: { __builtin: (args) => {
+        const v = args[0];
+        if (typeof v === 'string') return v.length;
+        if (Array.isArray(v)) return v.length;
+        if (v && v.__map) return v.__map.size;
+        throw pebError('len() expects a string, list or map');
+      }},
+      push: { __builtin: (args) => {
+        if (!Array.isArray(args[0])) throw pebError('push() expects a list first');
+        args[0].push(args[1]); return args[0];
+      }},
+      pop: { __builtin: (args) => { if (!Array.isArray(args[0])) throw pebError('pop() expects a list'); return args[0].pop() ?? null; }},
+      has: { __builtin: (args) => { const m = args[0]; if (!m || !m.__map) throw pebError('has() expects a map'); return m.__map.has(String(args[1])); }},
+      split: { __builtin: (args) => String(args[0]).split(String(args[1])) },
+      join: { __builtin: (args) => args[0].map(fmtValue).join(String(args[1] ?? '')) },
+      str: { __builtin: (args) => fmtValue(args[0]) },
+      num: { __builtin: (args) => { const n = parseFloat(args[0]); return isNaN(n) ? null : n; }},
+      abs: { __builtin: (args) => Math.abs(args[0]) },
+      min: { __builtin: (args) => Math.min(...args.flat(Infinity)) },
+      max: { __builtin: (args) => Math.max(...args.flat(Infinity)) },
+      range: { __builtin: (args) => { const n = args.length === 1 ? args[0] : args[1]; const start = args.length === 1 ? 0 : args[0]; const out = []; for (let i = start; i < n; i++) out.push(i); return out; }},
+      floor: { __builtin: (args) => Math.floor(args[0]) },
+      keys: { __builtin: (args) => { const m = args[0]; if (!m || !m.__map) throw pebError('keys() expects a map'); return [...m.__map.keys()]; }},
+      type: { __builtin: (args) => { const v = args[0]; if (v === null || v === undefined) return 'nil'; if (typeof v === 'number') return 'number'; if (typeof v === 'string') return 'string'; if (typeof v === 'boolean') return 'boolean'; if (Array.isArray(v)) return 'list'; if (v && v.__map) return 'map'; if (v && (v.__fn || v.__builtin)) return 'fn'; return 'unknown'; }},
+    };
+
+    function makeEnv(parent) { return { vars: new Map(), parent }; }
+    function envGet(env, name) {
+      let e = env;
+      while (e) { if (e.vars.has(name)) return { found: true, value: e.vars.get(name) }; e = e.parent; }
+      return { found: false };
+    }
+    function envSet(env, name, value) {
+      // assignment: walk to the scope that has it (resolved path uses depth, here name walk is fine for demo)
+      let e = env;
+      while (e) { if (e.vars.has(name)) { e.vars.set(name, value); return; } e = e.parent; }
+      throw pebError(`undefined variable '${name}'`);
+    }
+    function envDefine(env, name, value) { env.vars.set(name, value); }
+
+    function interpret(ast, options = {}) {
+      const out = [];
+      const globals = makeEnv(null);
+      for (const [k, v] of Object.entries(BUILTINS)) envDefine(globals, k, v);
+      const useResolve = options.resolve !== false;
+      let scopeInfo = { errors: [] };
+      if (useResolve) {
+        scopeInfo = resolve(ast);
+        if (scopeInfo.errors.length) {
+          const e = scopeInfo.errors[0];
+          e.stage = 'resolve';
+          throw e;
+        }
+      }
+
+      let callDepth = 0;
+      const MAX_DEPTH = 200;
+
+      function execStmt(s, env) {
+        switch (s.type) {
+          case 'Let': {
+            const v = s.init ? evaluate(s.init, env) : null;
+            envDefine(env, s.name, v);
+            return;
+          }
+          case 'FnDecl': {
+            const fn = { __fn: true, params: s.params, body: s.body, closure: env, name: s.name };
+            envDefine(env, s.name, fn);
+            return;
+          }
+          case 'Return': throw new ReturnEx(s.value ? evaluate(s.value, env) : null);
+          case 'If': {
+            if (truthy(evaluate(s.cond, env))) execStmt(s.then, env);
+            else if (s.alt) execStmt(s.alt, env);
+            return;
+          }
+          case 'While': {
+            while (truthy(evaluate(s.cond, env))) {
+              try { execStmt(s.body, env); }
+              catch (e) { if (e instanceof BreakEx) break; if (e instanceof ContinueEx) continue; throw e; }
+            }
+            return;
+          }
+          case 'For': {
+            // resolver: one scope for the for (init lives there); body Block makes its own child.
+            // each iteration gets a fresh copy of the loop bindings (per-iteration captures).
+            const loopEnv = makeEnv(env);
+            if (s.init) execStmt(s.init, loopEnv);
+            let guard = 0;
+            while (!s.cond || truthy(evaluate(s.cond, loopEnv))) {
+              if (++guard > 1e6) throw pebError('loop exceeded 1,000,000 iterations — infinite loop?', s);
+              const iterEnv = makeEnv(loopEnv.parent);
+              for (const [k, v] of loopEnv.vars) iterEnv.vars.set(k, v);
+              let broke = false, continued = false;
+              try { execStmt(s.body, iterEnv); }
+              catch (e) {
+                if (e instanceof BreakEx) broke = true;
+                else if (e instanceof ContinueEx) continued = true;
+                else throw e;
+              }
+              for (const [k, v] of iterEnv.vars) loopEnv.vars.set(k, v);
+              if (broke) break;
+              if (s.incr) evaluate(s.incr, loopEnv);
+            }
+            return;
+          }
+          case 'Break': throw new BreakEx();
+          case 'Continue': throw new ContinueEx();
+          case 'Block': {
+            const e2 = makeEnv(env);
+            for (const b of s.body) execStmt(b, e2);
+            return;
+          }
+          case 'ExprStmt': evaluate(s.expr, env); return;
+        }
+      }
+
+      function evaluate(e, env) {
+        switch (e.type) {
+          case 'Literal': return e.value;
+          case 'List': return e.items.map(x => evaluate(x, env));
+          case 'Map': {
+            const m = { __map: new Map() };
+            for (const [k, v] of e.entries) m.__map.set(k, evaluate(v, env));
+            return m;
+          }
+          case 'Var': {
+            if (e._depth !== undefined) {
+              let cur = env;
+              for (let i = 0; i < e._depth && cur; i++) cur = cur.parent;
+              if (cur && cur.vars.has(e.name)) return cur.vars.get(e.name);
+              // depth should never miss — fall through to name walk as a net
+            }
+            const r = envGet(env, e.name);
+            if (!r.found) throw pebError(`undefined variable '${e.name}'`, e);
+            return r.value;
+          }
+          case 'Assign-like via Binary =': return null;
+          case 'Binary': {
+            // assignment: `=` is not in BINDING — handle identifier = expr via special case
+            const L = e.left, R = e.right;
+            if (e.op === '=' ) {
+              if (L.type === 'Var') { const v = evaluate(R, env); envSet(env, L.name, v); return v; }
+              if (L.type === 'Index') {
+                const obj = evaluate(L.obj, env);
+                const idx = evaluate(L.index, env);
+                const v = evaluate(R, env);
+                if (Array.isArray(obj)) obj[idx] = v;
+                else if (obj && obj.__map) obj.__map.set(String(idx), v);
+                else throw pebError('cannot index-assign that value', L);
+                return v;
+              }
+              throw pebError('invalid assignment target', L);
+            }
+            // short-circuit
+            if (e.op === 'and' || e.op === '&&') { const l = evaluate(L, env); return truthy(l) ? evaluate(R, env) : l; }
+            if (e.op === 'or' || e.op === '||') { const l = evaluate(L, env); return truthy(l) ? l : evaluate(R, env); }
+            const l = evaluate(L, env), r = evaluate(R, env);
+            switch (e.op) {
+              case '+':
+                if (typeof l === 'string' || typeof r === 'string') return fmtValue(l) + fmtValue(r);
+                if (Array.isArray(l) && Array.isArray(r)) return [...l, ...r];
+                if (typeof l !== 'number' || typeof r !== 'number') throw pebError(`'+' expects numbers or strings, got ${typeof l} and ${typeof r}`, e);
+                return l + r;
+              case '-': return num(l, e) - num(r, e);
+              case '*': return num(l, e) * num(r, e);
+              case '/':
+                if (num(r, e) === 0) throw pebError('division by zero', e);
+                return l / r;
+              case '%':
+                if (num(r, e) === 0) throw pebError('modulo by zero', e);
+                return l % r;
+              case '==': return eq(l, r);
+              case '!=': return !eq(l, r);
+              case '<': return num(l, e) < num(r, e);
+              case '<=': return num(l, e) <= num(r, e);
+              case '>': return num(l, e) > num(r, e);
+              case '>=': return num(l, e) >= num(r, e);
+            }
+            throw pebError(`unknown operator ${e.op}`, e);
+          }
+          case 'Unary': {
+            const v = evaluate(e.operand, env);
+            if (e.op === 'not' || e.op === '!') return !truthy(v);
+            if (e.op === '-') return -num(v, e);
+            throw pebError(`unknown unary ${e.op}`, e);
+          }
+          case 'Call': {
+            const callee = evaluate(e.callee, env);
+            const args = e.args.map(a => evaluate(a, env));
+            if (callDepth >= MAX_DEPTH) throw pebError(`call depth exceeded ${MAX_DEPTH} — infinite recursion?`, e);
+            if (callee && callee.__builtin) {
+              try { callDepth++; return callee.__builtin(args, out); }
+              finally { callDepth--; }
+            }
+            if (callee && callee.__fn) {
+              if (args.length !== callee.params.length) {
+                throw pebError(`expected ${callee.params.length} argument(s), got ${args.length}`, e);
+              }
+              const env2 = makeEnv(callee.closure);
+              callee.params.forEach((p, i) => envDefine(env2, p, args[i]));
+              try {
+                callDepth++;
+                execStmt(callee.body, env2);
+              } catch (ex) {
+                if (ex instanceof ReturnEx) return ex.value;
+                throw ex;
+              } finally { callDepth--; }
+              return null;
+            }
+            throw pebError(`'${fmtValue(callee)}' is not callable`, e.callee.type === 'Var' ? e.callee : e);
+          }
+          case 'Index': {
+            const obj = evaluate(e.obj, env);
+            const idx = evaluate(e.index, env);
+            if (Array.isArray(obj)) {
+              const i = typeof idx === 'number' ? idx : parseInt(idx, 10);
+              if (!Number.isInteger(i) || i < 0 || i >= obj.length) throw pebError(`index ${i} out of range (length ${obj.length})`, e);
+              return obj[i];
+            }
+            if (obj && obj.__map) {
+              const v = obj.__map.get(String(idx));
+              return v === undefined ? null : v;
+            }
+            if (typeof obj === 'string') {
+              const i = idx;
+              if (i < 0 || i >= obj.length) throw pebError(`index ${i} out of range`, e);
+              return obj[i];
+            }
+            throw pebError('that value is not indexable', e.obj.type === 'Var' ? e.obj : e);
+          }
+          case 'Member': {
+            const obj = evaluate(e.obj, env);
+            if (obj && obj.__map) { const v = obj.__map.get(e.name); return v === undefined ? null : v; }
+            throw pebError('member access expects a map', e);
+          }
+          case 'FnExpr': return { __fn: true, params: e.params, body: e.body, closure: env, name: '<anonymous>' };
+          default: throw pebError(`cannot evaluate ${e.type}`, e);
+        }
+      }
+      function num(v, e) { if (typeof v !== 'number') throw pebError(`expected a number, got ${fmtValue(v)}`, e); return v; }
+      function eq(a, b) {
+        if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => eq(x, b[i]));
+        return a === b;
+      }
+
+      for (const s of ast.body) execStmt(s, globals);
+      return out;
+    }
+
+    // === AST pretty printer ===
+    function printAst(node, indent = 0) {
+      const pad = '  '.repeat(indent);
+      if (!node) return pad + 'nil';
+      switch (node.type) {
+        case 'Program': return node.body.map(s => printAst(s, indent)).join('\n');
+        case 'Let': return `${pad}Let\n${pad}  name: '${node.name}'\n${pad}  init:\n${node.init ? printAst(node.init, indent + 2) : pad + '    nil'}`;
+        case 'FnDecl': return `${pad}Fn '${node.name}'(${node.params.join(', ')})\n${printAst(node.body, indent + 1)}`;
+        case 'Return': return `${pad}Return\n${node.value ? printAst(node.value, indent + 1) : ''}`;
+        case 'If': return `${pad}If\n${pad}  cond:\n${printAst(node.cond, indent + 2)}\n${pad}  then:\n${printAst(node.then, indent + 2)}${node.alt ? `\n${pad}  else:\n${printAst(node.alt, indent + 2)}` : ''}`;
+        case 'While': return `${pad}While\n${pad}  cond:\n${printAst(node.cond, indent + 2)}\n${pad}  body:\n${printAst(node.body, indent + 2)}`;
+        case 'For': return `${pad}For\n${pad}  init:\n${node.init ? printAst(node.init, indent + 2) : pad + '    —'}\n${pad}  cond:\n${printAst(node.cond, indent + 2)}${node.incr ? `\n${pad}  incr:\n${printAst(node.incr, indent + 2)}` : ''}\n${pad}  body:\n${printAst(node.body, indent + 2)}`;
+        case 'Block': return `${pad}Block\n` + node.body.map(s => printAst(s, indent + 1)).join('\n');
+        case 'ExprStmt': return printAst(node.expr, indent);
+        case 'Binary': return `${pad}Binary(${node.op})\n${printAst(node.left, indent + 1)}\n${printAst(node.right, indent + 1)}`;
+        case 'Unary': return `${pad}Unary(${node.op})\n${printAst(node.operand, indent + 1)}`;
+        case 'Literal': return `${pad}Literal ${JSON.stringify(node.value)}`;
+        case 'Var': return `${pad}Var '${node.name}'`;
+        case 'Call': return `${pad}Call\n${printAst(node.callee, indent + 1)}\n` + node.args.map(a => printAst(a, indent + 1)).join('\n');
+        case 'Index': return `${pad}Index\n${printAst(node.obj, indent + 1)}\n${printAst(node.index, indent + 1)}`;
+        case 'List': return `${pad}List\n` + node.items.map(i => printAst(i, indent + 1)).join('\n');
+        case 'Map': return `${pad}Map\n` + node.entries.map(([k, v]) => `${pad}  key '${k}'\n` + printAst(v, indent + 2)).join('\n');
+        case 'FnExpr': return `${pad}Fn(${node.params.join(', ')})\n${printAst(node.body, indent + 1)}`;
+        case 'Break': return `${pad}Break`;
+        case 'Continue': return `${pad}Continue`;
+        default: return pad + node.type;
+      }
+    }
+
+    // === UI ===
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+    const PRESETS = {
+      fib: `fn fib(n) {\n  if (n < 2) { return n; }\n  return fib(n - 1) + fib(n - 2);\n}\nprint(fib(15));`,
+      closures: `fn counter() {\n  let n = 0;\n  return fn() { n = n + 1; return n; };\n}\nlet next = counter();\nprint([next(), next(), next()]);\n\nlet fns = [];\nfor (let i = 0; i < 3; i = i + 1) {\n  push(fns, fn() { return i; });\n}\nprint([fns[0](), fns[1](), fns[2]()]);`,
+      loops: `let total = 0;\nfor (let i = 1; i <= 10; i = i + 1) {\n  if (i % 2 == 0) { continue; }\n  total = total + i;\n}\nprint(total); // sum of odds 1..10 = 25\n\nlet n = 0;\nwhile (n < 3) { n = n + 1; }\nprint(n);`,
+      resolver: `let a = "global";\n{\n  fn show() { print(a); }\n  show();\n  let a = "block";\n  show(); // still global — resolver pins the scope\n}`,
+      error: `let x = 1;\nprint(y); // undefined variable — error names line and column`,
+    };
+
+    function run() {
+      const src = $('src').value;
+      const errBox = $('errors');
+      errBox.innerHTML = '';
+      const outEl = $('output');
+      outEl.className = 'result-box out';
+      try {
+        const tokens = lex(src);
+        $('tokBody').innerHTML = tokens.filter(t => t.kind !== 'EOF').map(t =>
+          `<tr><td class="mono">${esc(t.kind)}</td><td class="mono">${esc(t.lexeme)}</td><td class="mono muted">${t.line}:${t.col}</td></tr>`
+        ).join('') || '<tr><td colspan="3" class="muted">No tokens.</td></tr>';
+        const ast = parse(tokens);
+        $('astOut').textContent = printAst(ast);
+        const output = interpret(ast, { resolve: $('showResolve').checked });
+        outEl.textContent = output.length ? output.join('\n') : '(no output — use print())';
+      } catch (e) {
+        outEl.className = 'result-box err';
+        const pos = e.line !== undefined ? `line ${e.line}, column ${e.col}: ` : '';
+        outEl.textContent = `pebble: ${pos}${e.message}`;
+        errBox.innerHTML = `<div class="finding risk"><span class="kind">${e.stage === 'resolve' ? 'resolve error' : 'runtime/parse error'}</span><div class="detail">${esc((e.line !== undefined ? `at ${e.line}:${e.col} — ` : '') + e.message)}</div></div>`;
+        // still try to show tokens
+        try {
+          const tokens = lex(src);
+          $('tokBody').innerHTML = tokens.filter(t => t.kind !== 'EOF').map(t =>
+            `<tr><td class="mono">${esc(t.kind)}</td><td class="mono">${esc(t.lexeme)}</td><td class="mono muted">${t.line}:${t.col}</td></tr>`
+          ).join('');
+        } catch (_) {}
+        $('astOut').textContent = '(parse failed)';
+      }
+    }
+
+    document.querySelectorAll('.presets button').forEach(btn => {
+      btn.addEventListener('click', () => { $('src').value = PRESETS[btn.dataset.p]; run(); });
+    });
+    $('runBtn').addEventListener('click', run);
+    $('clearBtn').addEventListener('click', () => { $('output').textContent = ''; $('errors').innerHTML = ''; });
+    $('src').addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+    });
+    run();
+  </script>
+</body>
+</html>
