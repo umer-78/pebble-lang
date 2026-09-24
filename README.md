@@ -1,5 +1,9 @@
 # pebble
 
+[![CI](https://github.com/umer-78/pebble-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/umer-78/pebble-lang/actions/workflows/ci.yml)
+
+**Live demo:** https://umer-78.github.io/pebble-lang/
+
 A small programming language, implemented from scratch in Python with no
 dependencies: a hand-written lexer, a Pratt parser, a static scope resolver and
 a tree-walking interpreter. Closures, first-class functions, lists, maps, a REPL
