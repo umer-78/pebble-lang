@@ -2,7 +2,7 @@
 
 The textbook recursive-descent grammar gives every precedence level its own
 function — `equality` calls `comparison` calls `term` calls `factor` calls
-`unary` calls `call` calls `primary`. With the ten binary operators here that
+`unary` calls `call` calls `primary`. With the thirteen binary operators here that
 is seven near-identical functions whose only difference is which operators they
 match and which function they delegate to, and adding an operator means editing
 the chain in two places.

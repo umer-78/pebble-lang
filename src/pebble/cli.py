@@ -192,10 +192,11 @@ def _run(argv: list[str] | None) -> int:
         return 0
 
     interpreter = Interpreter(max_depth=args.max_depth, resolved=not args.no_resolve)
-    program = parse(tokenize(source))
-    if not args.no_resolve:
-        resolve(program, set(interpreter.globals.values))
     try:
+        # Lex, parse and resolve errors name the file too, not only runtime ones.
+        program = parse(tokenize(source))
+        if not args.no_resolve:
+            resolve(program, set(interpreter.globals.values))
         interpreter.run(program)
     except PebbleError as error:
         print(f"{origin}:{error}", file=sys.stderr)
