@@ -846,9 +846,14 @@ print([fns[0](), fns[1](), fns[2]()]); // [0, 1, 2]</div>
     function fmtValue(v) {
       if (v === null || v === undefined) return 'nil';
       if (typeof v === 'boolean') return v ? 'true' : 'false';
-      if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(v);
+      if (typeof v === 'number') {
+        // Same as the Python interpreter's stringify(): nan, inf and -inf, not NaN / Infinity.
+        if (Number.isNaN(v)) return 'nan';
+        if (!Number.isFinite(v)) return v > 0 ? 'inf' : '-inf';
+        return String(v);
+      }
       if (typeof v === 'string') return v;
-      if (Array.isArray(v)) return '[' + v.map(x => typeof x === 'string' && false ? x : fmtValue(x)).join(', ') + ']';
+      if (Array.isArray(v)) return '[' + v.map(fmtValue).join(', ') + ']';
       if (v.__fn) return '<fn>';
       if (v.__map) {
         const parts = [...v.__map.entries()].map(([k, val]) => `${k}: ${fmtValue(val)}`);
