@@ -1,4 +1,4 @@
-# pebble
+# pebble: small programming language
 
 [![CI](https://github.com/umer-78/pebble-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/umer-78/pebble-lang/actions/workflows/ci.yml)
 

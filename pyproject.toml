@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pebble-lang"
 version = "1.0.0"
-description = "A small programming language implemented from scratch: lexer, Pratt parser, static resolver and tree-walking interpreter, with closures and a REPL."
+description = "A small programming language implemented from scratch in Python: lexer, Pratt parser, static scope resolver and tree-walking interpreter, with closures and a REPL."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Umer Hashmi" }]
