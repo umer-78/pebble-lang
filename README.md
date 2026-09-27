@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/umer-78/pebble-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/umer-78/pebble-lang/actions/workflows/ci.yml)
 
+[![Pebble: the live demo](.github/preview.jpg)](https://umer-78.github.io/pebble-lang/)
+
 **Live demo:** https://umer-78.github.io/pebble-lang/
 
 A small programming language, implemented from scratch in Python with no
