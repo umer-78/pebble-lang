@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en" data-scene="engine" data-fx-compact="">
+<html lang="en" data-scene="ast" data-fx-compact="" data-look="zilla" data-hero="center" data-card="glass" data-motif="plain" data-backdrop="rings">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0a0c10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#8163c7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#100d18" media="(prefers-color-scheme: dark)">
   <title>pebble — Language REPL Demo</title>
   <meta property="og:type" content="website">
   <meta property="og:title" content="pebble — Language REPL Demo">
@@ -407,7 +407,7 @@ html.mk-pre header.top, html.mk-pre main section, html.mk-pre section.card, html
 <script>(function(){try{if(!(matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)){var r=document.documentElement;r.classList.add('mk-pre');setTimeout(function(){r.classList.remove('mk-pre')},2200)}}catch(e){}})();</script>
 <!-- /motion-kit:head -->
 <!-- fx:v2 -->
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@600;700&family=Inter:wght@400;500;600&family=Fira+Code:wght@400;600&display=swap" id="fx-fonts">
 <link rel="stylesheet" href="fx.css">
 <style>:root { --fx-2: #06b6d4; --fx-3: #f59e0b; }</style>
 <!-- /fx:v2 -->
@@ -421,6 +421,11 @@ html.mk-pre header.top, html.mk-pre main section, html.mk-pre section.card, html
 <meta property="og:image:alt" content="pebble — Language REPL Demo: the live demo">
 <meta name="twitter:card" content="summary_large_image">
 <!-- /og -->
+<style id="fx-look">:root[data-look] { --font: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; --fx-display: 'Zilla Slab', Georgia, serif; --mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --fx-display-weight: 700; --fx-tracking: -0.01em; --fx-title-case: none; --fx-radius: 10px; --fx-hero-radius: 20px; --fx-control-radius: 8px; --accent: #8163c7; --accent-hover: #7051b3; --accent-soft: #f2efff; --accent-glow: rgb(129 99 199 / 0.16); --on-accent: #ffffff; --fx-2: #c9690b; --fx-3: #709afb; --bg: #f9f8ff; --bg-elevated: #fdfdff; --surface: #fefeff; --surface-2: #f4f2fc; --surface-3: #ece9f5; --border: #dedce9; --border-strong: #c5c2d0; --line: #dedce9; }
+@media (prefers-color-scheme: dark) { :root[data-look]:not([data-theme="light"]) { --accent: #a98ef1; --accent-hover: #baa3fd; --accent-soft: rgb(169 142 241 / 0.14); --accent-glow: rgb(169 142 241 / 0.2); --on-accent: #130f1d; --fx-2: #f49752; --fx-3: #9fbdfd; --bg: #100d18; --bg-elevated: #17141f; --surface: #1a1723; --surface-2: #221f2c; --surface-3: #2c2936; --border: #312e3a; --border-strong: #43404c; --line: #312e3a; } }
+:root[data-look][data-theme="dark"] { --accent: #a98ef1; --accent-hover: #baa3fd; --accent-soft: rgb(169 142 241 / 0.14); --accent-glow: rgb(169 142 241 / 0.2); --on-accent: #130f1d; --fx-2: #f49752; --fx-3: #9fbdfd; --bg: #100d18; --bg-elevated: #17141f; --surface: #1a1723; --surface-2: #221f2c; --surface-3: #2c2936; --border: #312e3a; --border-strong: #43404c; --line: #312e3a; }</style>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.min.js" data-fx>
+<link rel="modulepreload" href="fx3d.js" data-fx>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
